@@ -1,7 +1,8 @@
 import type { JSONSchema7 } from 'json-schema';
 import * as t from 'io-ts';
 
-import { toJsonSchema, TaggedCodec, mapValues } from '../index';
+import { mapValues, isObject } from '../utils';
+import { toJsonSchema, TaggedCodec } from '../index';
 
 describe('converting io-ts to json schema', () => {
     describe('primitives', () => {
@@ -116,11 +117,10 @@ function expectSchemaMatch(codec: TaggedCodec, schema: JSONSchema7) {
 function expectDef(definition: JSONSchema7) {
     return isObject(definition) ? deepObjectContaining(definition) : definition;
 }
-function deepObjectContaining(obj: Record<keyof any, unknown>) {
+function deepObjectContaining(
+    obj: Record<keyof any, unknown>,
+): ReturnType<typeof expect.objectContaining> {
     return expect.objectContaining(
-        mapValues(obj, v => (isObject(v) ? expect.objectContaining(v) : v)),
+        mapValues(obj, v => (isObject(v) ? deepObjectContaining(v) : v)),
     );
-}
-function isObject(item: unknown): item is Record<keyof any, unknown> {
-    return !!item && typeof item === 'object';
 }

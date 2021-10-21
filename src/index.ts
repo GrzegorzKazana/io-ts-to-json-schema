@@ -1,37 +1,79 @@
 import type { JSONSchema7 } from 'json-schema';
 import * as t from 'io-ts';
 
+import { hasKey, isNotEmpty, mapValues } from './utils';
+
 export type TaggedCodec =
-    | t.NullType
-    | t.UndefinedType
-    | t.VoidType
-    | t.UnknownType
-    | t.StringType
-    | t.NumberType
-    | t.BigIntType
-    | t.BooleanType
-    | t.AnyArrayType
-    | t.AnyDictionaryType
-    | t.FunctionType
-    | t.RefinementType<any>
-    | t.LiteralType<any>
+    | t.NullC
+    | t.UndefinedC
+    | t.VoidC
+    | t.UnknownC
+    | t.StringC
+    | t.NumberC
+    | t.BigIntC
+    | t.BooleanC
+    | t.UnknownArrayC
+    | t.UnknownRecordC
+    | t.FunctionC
+    | t.RefinementC<any>
+    | t.LiteralC<any>
     | t.RecursiveType<any>
-    | t.ArrayType<any>
-    | t.InterfaceType<any>
-    | t.PartialType<any>
-    | t.DictionaryType<any, any>
-    | t.UnionType<any>
-    | t.IntersectionType<any>
-    | t.TupleType<any>
-    | t.ReadonlyType<any>
-    | t.ReadonlyArrayType<any>
-    | t.TaggedUnionType<any, any>
-    | t.NeverType
-    | t.AnyType
-    | t.ObjectType
-    | t.StrictType<any>
-    | t.KeyofType<any>
-    | t.ExactType<any>;
+    | t.ArrayC<any>
+    | t.TypeC<any>
+    | t.PartialC<any>
+    | t.RecordC<any, any>
+    | t.UnionC<any>
+    | t.IntersectionC<any>
+    | t.TupleC<any>
+    | t.ReadonlyC<any>
+    | t.ReadonlyArrayC<any>
+    | t.TaggedUnionC<any, any>
+    // | t.NeverC
+    | t.AnyC
+    | t.ObjectC
+    | t.StrictC<any>
+    | t.KeyofC<any>
+    | t.ExactC<any>;
+
+type Tags = { [K in TaggedCodec['_tag']]: K };
+
+const CodecTags: Tags = {
+    NullType: 'NullType',
+    UndefinedType: 'UndefinedType',
+    VoidType: 'VoidType',
+    UnknownType: 'UnknownType',
+    StringType: 'StringType',
+    NumberType: 'NumberType',
+    BigIntType: 'BigIntType',
+    BooleanType: 'BooleanType',
+    AnyArrayType: 'AnyArrayType',
+    AnyDictionaryType: 'AnyDictionaryType',
+    FunctionType: 'FunctionType',
+    RefinementType: 'RefinementType',
+    LiteralType: 'LiteralType',
+    RecursiveType: 'RecursiveType',
+    ArrayType: 'ArrayType',
+    InterfaceType: 'InterfaceType',
+    PartialType: 'PartialType',
+    DictionaryType: 'DictionaryType',
+    UnionType: 'UnionType',
+    IntersectionType: 'IntersectionType',
+    TupleType: 'TupleType',
+    ReadonlyType: 'ReadonlyType',
+    ReadonlyArrayType: 'ReadonlyArrayType',
+    // NeverType: 'NeverType',
+    AnyType: 'AnyType',
+    ObjectType: 'ObjectType',
+    StrictType: 'StrictType',
+    KeyofType: 'KeyofType',
+    ExactType: 'ExactType',
+} as const;
+
+function isTaggedCodec(codec: t.Mixed): codec is TaggedCodec {
+    return hasKey(codec, '_tag') && typeof codec._tag === 'string' && codec._tag in CodecTags;
+}
+
+export type Json = null | number | string | boolean | Array<Json> | { [k: string]: Json };
 
 export function toJsonSchema(codec: TaggedCodec): JSONSchema7 {
     switch (codec._tag) {
@@ -39,54 +81,38 @@ export function toJsonSchema(codec: TaggedCodec): JSONSchema7 {
         case 'ReadonlyArrayType':
             return {
                 type: 'array',
+                description: codec.name,
                 items: toJsonSchema(codec.type),
             };
 
         case 'NullType':
-            return { type: 'null' };
-
-        case 'UndefinedType':
-        case 'VoidType':
-            return {};
-
-        case 'UnknownType':
-            return {};
+            return { type: 'null', description: codec.name };
 
         case 'StringType':
-            return { type: 'string' };
+            return { type: 'string', description: codec.name };
 
         case 'NumberType':
-            return { type: 'number' };
+            return { type: 'number', description: codec.name };
 
         case 'BigIntType':
-            return { type: 'number' };
+            return { type: 'number', description: codec.name };
 
         case 'BooleanType':
-            return { type: 'boolean' };
-
-        case 'AnyArrayType':
-            return {
-                type: 'array',
-                items: {},
-            };
+            return { type: 'boolean', description: codec.name };
 
         case 'AnyDictionaryType':
-            return { type: 'object' };
-
-        case 'FunctionType':
-        case 'RefinementType':
-            return {};
+            return { type: 'object', description: codec.name };
 
         case 'LiteralType':
-            return { const: codec.value };
+            return { const: codec.value, description: codec.name };
 
-        case 'RecursiveType':
-            // TODO
-            return {};
+        case 'ObjectType':
+            return { type: 'object', description: codec.name };
 
         case 'InterfaceType':
             return {
                 type: 'object',
+                description: codec.name,
                 properties: mapValues(codec.props, toJsonSchema),
                 required: Object.keys(codec.props),
             };
@@ -94,6 +120,8 @@ export function toJsonSchema(codec: TaggedCodec): JSONSchema7 {
         case 'ExactType':
             return {
                 type: 'object',
+                description: codec.name,
+
                 properties: mapValues(codec.type.props, toJsonSchema),
                 required: Object.keys(codec.type.props),
                 additionalProperties: false,
@@ -102,6 +130,7 @@ export function toJsonSchema(codec: TaggedCodec): JSONSchema7 {
         case 'StrictType':
             return {
                 type: 'object',
+                description: codec.name,
                 properties: mapValues(codec.props, toJsonSchema),
                 required: Object.keys(codec.props),
                 additionalProperties: false,
@@ -110,24 +139,27 @@ export function toJsonSchema(codec: TaggedCodec): JSONSchema7 {
         case 'PartialType':
             return {
                 type: 'object',
+                description: codec.name,
                 properties: mapValues(codec.props, toJsonSchema),
             };
 
         case 'DictionaryType':
             return {
                 type: 'object',
+                description: codec.name,
                 additionalProperties: toJsonSchema(codec.codomain),
             };
 
         case 'UnionType':
-            return { anyOf: codec.types.map(toJsonSchema) };
+            return { anyOf: codec.types.map(toJsonSchema), description: codec.name };
 
         case 'IntersectionType':
-            return { allOf: codec.types.map(toJsonSchema) };
+            return { allOf: codec.types.map(toJsonSchema), description: codec.name };
 
         case 'TupleType':
             return {
                 type: 'array',
+                description: codec.name,
                 items: codec.types.map(toJsonSchema),
                 minItems: codec.types.length,
                 maxItems: codec.types.length,
@@ -136,28 +168,29 @@ export function toJsonSchema(codec: TaggedCodec): JSONSchema7 {
         case 'ReadonlyType':
             return toJsonSchema(codec.type);
 
-        case 'NeverType':
-            return {};
-
-        case 'AnyType':
-            return {};
-
-        case 'ObjectType':
-            return { type: 'object' };
-
         case 'KeyofType':
-            return { enum: Object.keys(codec.keys) };
+            return isNotEmpty(codec.keys)
+                ? { enum: Object.keys(codec.keys), description: codec.name }
+                : {};
+
+        case 'RecursiveType':
+            // TODO
+            return {};
+
+        // case 'NeverType':
+        case 'AnyType':
+        case 'UndefinedType':
+        case 'VoidType':
+        case 'UnknownType':
+        case 'FunctionType':
+        case 'RefinementType':
+            return {};
+
+        case 'AnyArrayType':
+            return {
+                type: 'array',
+                description: codec.name,
+                items: {},
+            };
     }
-}
-
-export function mapValues<R extends Record<keyof any, unknown>, T>(
-    obj: R,
-    fn: (v: R[keyof R], k: keyof R) => T,
-): { [K in keyof R]: T } {
-    const typedEntries = Object.entries(obj) as Array<[keyof R, R[keyof R]]>;
-
-    return typedEntries.reduce((acc, [k, v]) => {
-        acc[k] = fn(v, k);
-        return acc;
-    }, {} as { [K in keyof R]: T });
 }
