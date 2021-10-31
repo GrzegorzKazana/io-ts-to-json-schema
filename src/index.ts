@@ -1,7 +1,14 @@
 import type { JSONSchema7 } from 'json-schema';
 import * as t from 'io-ts';
 
-import { hasKey, isNotEmpty, mapValues } from './utils';
+import { Context } from './context';
+import { isNotEmpty, mapValues } from './utils';
+
+declare module 'json-schema' {
+    interface JSONSchema7 {
+        $defs?: Record<string, JSONSchema7>;
+    }
+}
 
 export type TaggedCodec =
     | t.NullC
@@ -28,7 +35,6 @@ export type TaggedCodec =
     | t.ReadonlyC<any>
     | t.ReadonlyArrayC<any>
     | t.TaggedUnionC<any, any>
-    // | t.NeverC
     | t.AnyC
     | t.ObjectC
     | t.StrictC<any>
@@ -61,7 +67,6 @@ const CodecTags: Tags = {
     TupleType: 'TupleType',
     ReadonlyType: 'ReadonlyType',
     ReadonlyArrayType: 'ReadonlyArrayType',
-    // NeverType: 'NeverType',
     AnyType: 'AnyType',
     ObjectType: 'ObjectType',
     StrictType: 'StrictType',
@@ -69,128 +74,228 @@ const CodecTags: Tags = {
     ExactType: 'ExactType',
 } as const;
 
-function isTaggedCodec(codec: t.Mixed): codec is TaggedCodec {
-    return hasKey(codec, '_tag') && typeof codec._tag === 'string' && codec._tag in CodecTags;
+export type Json = null | number | string | boolean | Array<Json> | { [k: string]: Json };
+export { Context };
+
+export function toJsonSchema(codec: t.Mixed, options: Partial<Context> = {}): JSONSchema7 {
+    const toJsonSchema = createToJsonSchema(Context.withDefaults(options));
+
+    return toJsonSchema(codec);
 }
 
-export type Json = null | number | string | boolean | Array<Json> | { [k: string]: Json };
+function isTaggedCodec(codec: t.Mixed): codec is TaggedCodec {
+    return t.type({ _tag: t.keyof(CodecTags) }).is(codec);
+}
 
-export function toJsonSchema(codec: TaggedCodec): JSONSchema7 {
+function createToJsonSchema(opts: Context) {
+    return (codec: t.Mixed): JSONSchema7 => {
+        const options = Context.extendCodecPath(opts, codec.name);
+        const schema = isTaggedCodec(codec) ? taggedToSchema(codec, options) : {};
+
+        return opts.customizer(schema, codec, opts);
+    };
+}
+
+function taggedToSchema(codec: TaggedCodec, options: Context): JSONSchema7 {
     switch (codec._tag) {
-        case 'ArrayType':
-        case 'ReadonlyArrayType':
+        case CodecTags.ArrayType:
+        case CodecTags.ReadonlyArrayType: {
+            const opts = Context.extendPaths(options, { codec: codec.name, schema: ['items'] });
+            const toJsonSchema = createToJsonSchema(opts);
+
             return {
                 type: 'array',
                 description: codec.name,
                 items: toJsonSchema(codec.type),
             };
+        }
 
-        case 'NullType':
+        case CodecTags.AnyArrayType: {
+            const opts = Context.extendPaths(options, { codec: codec.name, schema: ['items'] });
+            const toJsonSchema = createToJsonSchema(opts);
+
+            return {
+                type: 'array',
+                description: codec.name,
+                items: toJsonSchema(t.any),
+            };
+        }
+        case CodecTags.NullType:
             return { type: 'null', description: codec.name };
 
-        case 'StringType':
+        case CodecTags.StringType:
             return { type: 'string', description: codec.name };
 
-        case 'NumberType':
+        case CodecTags.NumberType:
             return { type: 'number', description: codec.name };
 
-        case 'BigIntType':
+        case CodecTags.BigIntType:
             return { type: 'number', description: codec.name };
 
-        case 'BooleanType':
+        case CodecTags.BooleanType:
             return { type: 'boolean', description: codec.name };
 
-        case 'AnyDictionaryType':
+        case CodecTags.AnyDictionaryType:
             return { type: 'object', description: codec.name };
 
-        case 'LiteralType':
+        case CodecTags.LiteralType:
             return { const: codec.value, description: codec.name };
 
-        case 'ObjectType':
+        case CodecTags.ObjectType:
             return { type: 'object', description: codec.name };
 
-        case 'InterfaceType':
+        case CodecTags.InterfaceType: {
+            const opts = Context.extendPaths(options, {
+                codec: codec.name,
+                schema: ['properties'],
+            });
+
             return {
                 type: 'object',
                 description: codec.name,
-                properties: mapValues(codec.props, toJsonSchema),
+                properties: mapValues(codec.props, (codec, key) =>
+                    toJsonSchema(codec, Context.extendSchemaPath(opts, [key])),
+                ),
                 required: Object.keys(codec.props),
             };
+        }
 
-        case 'ExactType':
+        case CodecTags.ExactType: {
+            const opts = Context.extendPaths(options, {
+                codec: codec.name,
+                schema: ['properties'],
+            });
+
             return {
                 type: 'object',
                 description: codec.name,
-
-                properties: mapValues(codec.type.props, toJsonSchema),
+                properties: mapValues(codec.type.props, (codec, key) =>
+                    toJsonSchema(codec, Context.extendSchemaPath(opts, [key])),
+                ),
                 required: Object.keys(codec.type.props),
                 additionalProperties: false,
             };
+        }
 
-        case 'StrictType':
+        case CodecTags.StrictType: {
+            const opts = Context.extendPaths(options, {
+                codec: codec.name,
+                schema: ['properties'],
+            });
+
             return {
                 type: 'object',
                 description: codec.name,
-                properties: mapValues(codec.props, toJsonSchema),
+                properties: mapValues(codec.props, (codec, key) =>
+                    toJsonSchema(codec, Context.extendSchemaPath(opts, [key])),
+                ),
                 required: Object.keys(codec.props),
                 additionalProperties: false,
             };
+        }
 
-        case 'PartialType':
+        case CodecTags.PartialType: {
+            const opts = Context.extendPaths(options, {
+                codec: codec.name,
+                schema: ['properties'],
+            });
+
             return {
                 type: 'object',
                 description: codec.name,
-                properties: mapValues(codec.props, toJsonSchema),
+                properties: mapValues(codec.props, (codec, key) =>
+                    toJsonSchema(codec, Context.extendSchemaPath(opts, [key])),
+                ),
             };
+        }
 
-        case 'DictionaryType':
+        case CodecTags.DictionaryType: {
+            const opts = Context.extendPaths(options, {
+                codec: codec.name,
+                schema: ['additionalProperties'],
+            });
+            const toJsonSchema = createToJsonSchema(opts);
+
             return {
                 type: 'object',
                 description: codec.name,
                 additionalProperties: toJsonSchema(codec.codomain),
             };
+        }
 
-        case 'UnionType':
-            return { anyOf: codec.types.map(toJsonSchema), description: codec.name };
+        case CodecTags.UnionType: {
+            const opts = Context.extendPaths(options, { codec: codec.name, schema: ['anyOf'] });
+            const innerTypes: TaggedCodec[] = codec.types;
 
-        case 'IntersectionType':
-            return { allOf: codec.types.map(toJsonSchema), description: codec.name };
+            return {
+                anyOf: innerTypes.map((codec, idx) =>
+                    toJsonSchema(codec, Context.extendSchemaPath(opts, [`${idx}`])),
+                ),
+                description: codec.name,
+            };
+        }
+        case CodecTags.IntersectionType: {
+            const opts = Context.extendPaths(options, { codec: codec.name, schema: ['allOf'] });
+            const innerTypes: TaggedCodec[] = codec.types;
 
-        case 'TupleType':
+            return {
+                allOf: innerTypes.map((codec, idx) =>
+                    toJsonSchema(codec, Context.extendSchemaPath(opts, [`${idx}`])),
+                ),
+                description: codec.name,
+            };
+        }
+        case CodecTags.TupleType: {
+            const opts = Context.extendPaths(options, { codec: codec.name, schema: ['items'] });
+            const innerTypes: TaggedCodec[] = codec.types;
+
             return {
                 type: 'array',
                 description: codec.name,
-                items: codec.types.map(toJsonSchema),
+                items: innerTypes.map((codec, idx) =>
+                    toJsonSchema(codec, Context.extendSchemaPath(opts, [`${idx}`])),
+                ),
                 minItems: codec.types.length,
                 maxItems: codec.types.length,
             };
-
-        case 'ReadonlyType':
+        }
+        case CodecTags.ReadonlyType:
             return toJsonSchema(codec.type);
 
-        case 'KeyofType':
+        case CodecTags.KeyofType:
             return isNotEmpty(codec.keys)
                 ? { enum: Object.keys(codec.keys), description: codec.name }
                 : {};
 
-        case 'RecursiveType':
-            // TODO
-            return {};
+        case CodecTags.RecursiveType: {
+            if (options.availableDefs[codec.name])
+                return { $ref: options.availableDefs[codec.name] };
 
-        // case 'NeverType':
-        case 'AnyType':
-        case 'UndefinedType':
-        case 'VoidType':
-        case 'UnknownType':
-        case 'FunctionType':
-        case 'RefinementType':
-            return {};
+            const opts = Context.extendPaths(options, {
+                codec: codec.name,
+                schema: ['$defs', codec.name],
+            });
+            const path = Context.materializeSchemaPath(opts);
+            const recursiveOpts = Context.extendDefs(opts, codec.name, path);
+            const toJsonSchema = createToJsonSchema(recursiveOpts);
 
-        case 'AnyArrayType':
+            const innerCodec: TaggedCodec = codec.runDefinition();
+
             return {
-                type: 'array',
-                description: codec.name,
-                items: {},
+                $ref: path,
+                $defs: {
+                    [codec.name]: toJsonSchema(innerCodec),
+                },
             };
+        }
+
+        case CodecTags.AnyType:
+        case CodecTags.UndefinedType:
+        case CodecTags.VoidType:
+        case CodecTags.UnknownType:
+        case CodecTags.FunctionType:
+        case CodecTags.RefinementType:
+        default:
+            return {};
     }
 }

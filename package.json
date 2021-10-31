@@ -22,7 +22,7 @@
     "dependencies": {
         "@types/json-schema": "^7.0.9",
         "fast-check": "^2.18.0",
-        "fp-ts": "^2.6.6",
-        "io-ts": "^2.2.6"
+        "fp-ts": "^2.11.5",
+        "io-ts": "^2.2.16"
     }
 }

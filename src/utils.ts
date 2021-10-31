@@ -1,11 +1,11 @@
 export function mapValues<R extends Record<keyof any, unknown>, T>(
     obj: R,
-    fn: (v: R[keyof R], k: keyof R) => T,
+    fn: (v: R[keyof R], k: string) => T,
 ): { [K in keyof R]: T } {
     const typedEntries = Object.entries(obj) as Array<[keyof R, R[keyof R]]>;
 
     return typedEntries.reduce((acc, [k, v]) => {
-        acc[k] = fn(v, k);
+        acc[k] = fn(v, k as string);
         return acc;
     }, {} as { [K in keyof R]: T });
 }
@@ -23,4 +23,8 @@ export function hasKey<K extends string, R extends object>(
 
 export function isObject(item: unknown): item is Record<keyof any, unknown> {
     return !!item && typeof item === 'object';
+}
+
+export function isString(item: unknown): item is string {
+    return typeof item === 'string';
 }
