@@ -1,18 +1,39 @@
 {
     "name": "io-ts-to-json-schema",
-    "version": "1.0.0",
-    "description": "",
-    "main": "index.js",
-    "scripts": {
-        "test": "jest",
-        "test:watch": "jest --watch"
+    "version": "0.1.0",
+    "author": "kazana.grzegorz@gmail.com",
+    "license": "MIT",
+    "description": "Understandable io-ts error reports.",
+    "keywords": [
+        "io-ts",
+        "json",
+        "schema",
+        "json-schema",
+        "validation"
+    ],
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/GrzegorzKazana/io-ts-to-json-schema"
     },
-    "keywords": [],
-    "author": "",
-    "license": "ISC",
+    "main": "dist/cjs/index.js",
+    "module": "dist/esm/index.js",
+    "types": "dist/types/index.d.ts",
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "dev": "tsc --watch",
+        "build": "tsc && tsc -p tsconfig.cjs.json",
+        "test": "jest",
+        "test:watch": "jest --watch",
+        "prepublishOnly": "npm run build"
+    },
     "devDependencies": {
         "@types/jest": "^27.0.2",
         "conditional-type-checks": "^1.0.5",
+        "fast-check": "^2.18.0",
+        "fp-ts": "^2.11.5",
+        "io-ts": "^2.2.16",
         "jest": "^27.3.1",
         "json-schema-faker": "^0.5.0-rcv.40",
         "ts-jest": "^27.0.7",
@@ -20,9 +41,10 @@
         "typescript": "^4.4.4"
     },
     "dependencies": {
-        "@types/json-schema": "^7.0.9",
-        "fast-check": "^2.18.0",
-        "fp-ts": "^2.11.5",
-        "io-ts": "^2.2.16"
+        "@types/json-schema": "^7.0.9"
+    },
+    "peerDependencies": {
+        "fp-ts": "2.x",
+        "io-ts": "2.x"
     }
 }
