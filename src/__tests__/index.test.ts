@@ -302,6 +302,38 @@ describe('converting io-ts to json schema', () => {
 
         expect(schema).toEqual(expectDef(expected));
     });
+
+    it('should allow for customizing codecs', () => {
+        const codec = t.type(
+            {
+                a: t.string,
+                b: t.union([t.string, t.null], 'StringOrNull'),
+            },
+            'FooBar',
+        );
+
+        const schema = toJsonSchema(codec, {
+            codecCustomizer: codec => {
+                if (codec.name !== 'FooBar' || !(codec instanceof t.InterfaceType)) return codec;
+
+                // omit single field
+                const { a: _, ...props } = codec.props;
+
+                return t.type(props, codec.name);
+            },
+        });
+        const expected: JSONSchema7 = {
+            type: 'object',
+            required: ['b'],
+            properties: {
+                b: {
+                    anyOf: [{ type: 'string' }, { type: 'null' }],
+                },
+            },
+        };
+
+        expect(schema).toEqual(expectDef(expected));
+    });
 });
 
 function expectSchemaMatch(codec: TaggedCodec, schema: JSONSchema7) {

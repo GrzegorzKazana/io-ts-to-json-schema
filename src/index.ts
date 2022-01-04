@@ -90,9 +90,12 @@ function isTaggedCodec(codec: t.Mixed): codec is TaggedCodec {
 function createToJsonSchema(opts: Context) {
     return (codec: t.Mixed): JSONSchema7 => {
         const options = Context.extendCodecPath(opts, codec.name);
-        const schema = isTaggedCodec(codec) ? taggedToSchema(codec, options) : {};
+        const customizedCodec = opts.codecCustomizer(codec, opts);
+        const schema = isTaggedCodec(customizedCodec)
+            ? taggedToSchema(customizedCodec, options)
+            : {};
 
-        return opts.customizer(schema, codec, opts);
+        return opts.customizer(schema, customizedCodec, opts);
     };
 }
 

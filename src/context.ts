@@ -6,6 +6,7 @@ export type Context = {
     schemaPath: Array<string>;
     availableDefs: Record<string, string>;
     customizer: (schema: JSONSchema7, codec: t.Mixed, context: Context) => JSONSchema7;
+    codecCustomizer: (codec: t.Mixed, context: Context) => t.Mixed;
 };
 
 export const Context = {
@@ -14,6 +15,7 @@ export const Context = {
         schemaPath: [],
         availableDefs: {},
         customizer: t.identity,
+        codecCustomizer: t.identity,
         ...opts,
     }),
 
