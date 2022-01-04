@@ -135,3 +135,46 @@ const schema = toJsonSchema(codec, {
 //     "description": "some description for foobar"
 // }
 ```
+
+-   ### codec customization
+
+Each entered codec can be manipulated beforehand.
+
+```ts
+const codec = t.type(
+    {
+        a: t.string,
+        b: t.union([t.string, t.null], 'StringOrNull'),
+    },
+    'FooBar',
+);
+
+const schema = toJsonSchema(codec, {
+    codecCustomizer: codec => {
+        if (codec.name !== 'FooBar' || !(codec instanceof t.InterfaceType)) return codec;
+
+        // omit single field
+        const { a: _, ...props } = codec.props;
+
+        return t.type(props, codec.name);
+    },
+});
+// {
+//     "type": "object",
+//     "required": [
+//         "b"
+//     ],
+//     "properties": {
+//         "b": {
+//             "anyOf": [
+//                 {
+//                     "type": "string"
+//                 },
+//                 {
+//                     "type": "null"
+//                 }
+//             ]
+//         }
+//     },
+// }
+```
